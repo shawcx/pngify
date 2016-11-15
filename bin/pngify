@@ -2,9 +2,11 @@
 
 from __future__ import print_function
 
+import argparse
 import binascii
 import hashlib
 import math
+import os
 import struct
 import sys
 import zlib
@@ -16,9 +18,36 @@ except ImportError:
 
 MAGIC = b'\x89PNG\r\n\x1a\n'
 
+# python 2/3 support
+stdin  = getattr(sys.stdin,  'buffer', sys.stdin)
+stdout = getattr(sys.stdout, 'buffer', sys.stdout)
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('-w', '--width',
+    type=int, default=0,
+    help='specify the width of the PNG')
+
+parser.add_argument('-c', '--compress',
+    action='store_true',
+    help='compress data to be stored')
+
+parser.add_argument('-p', '--password',
+    help='encryption password')
+
+parser.add_argument('input',
+    nargs='?', type=argparse.FileType('rb'), default=stdin,
+    help='file to read data from (default stdin)')
+
+parser.add_argument('output',
+    nargs='?', type=argparse.FileType('wb'), default=stdout,
+    help='file to write data to (default stdout)')
+
+
 def genkey(password):
     material = hashlib.sha512(password.encode('utf-8')).digest()
     return material[:32],material[-16:]
+
 
 def encrypt(password, data):
     key,iv = genkey(password)
@@ -27,6 +56,7 @@ def encrypt(password, data):
     cipher = AES.new(key, AES.MODE_CBC, iv)
     return cipher.encrypt(data)
 
+
 def decrypt(password, data):
     key,iv = genkey(password)
     cipher = AES.new(key, AES.MODE_CBC, iv)
@@ -34,15 +64,17 @@ def decrypt(password, data):
     pad, = struct.unpack('<B', data[-1:])
     return data[:-pad]
 
+
 class PNGWriter(object):
-    def __init__(self, compress=False, password=None, width=0, height=0):
-        self.compress = compress
-        self.password = password
-        self.width  = width
-        self.height = height
-        self.depth  = 8
-        self.color  = 2
-        self.data = []
+    def __init__(self, args):
+        self.compress = args.compress
+        self.password = args.password
+        self.width    = args.width
+        self.height   = 0
+        self.depth    = 8
+        self.color    = 2
+        self.data     = []
+        self.origin   = os.path.basename(args.input.name)
 
     def pixels(self, data):
         self.data.append(data)
@@ -55,7 +87,8 @@ class PNGWriter(object):
     def save(self):
         roundup = lambda val: int(math.ceil(val))
 
-        data = b''.join(self.data)
+        origin = self.origin.encode('utf-8')
+        data = struct.pack('>H', len(origin)) + origin + b''.join(self.data)
 
         if self.compress:
             data = zlib.compress(data)
@@ -93,8 +126,8 @@ class PNGWriter(object):
 
 
 class PNGReader(object):
-    def __init__(self, password=None):
-        self.password = password
+    def __init__(self, args):
+        self.password = args.password
         self.data = []
 
     def read(self, png):
@@ -116,7 +149,10 @@ class PNGReader(object):
         if compress:
             data = zlib.decompress(data)
 
-        return data
+        origin_size, = struct.unpack('>H', data[:2])
+        origin = data[2:2+origin_size].decode('utf-8')
+        sys.stderr.write('Original filename: %s\n' % origin)
+        return data[2+origin_size:]
 
     def parse(self, png):
         if not png.startswith(MAGIC):
@@ -166,25 +202,7 @@ class PNGReader(object):
         return True
 
 
-if '__main__' == __name__:
-    import argparse
-
-    # python 2/3 support
-    stdin  = getattr(sys.stdin,  'buffer', sys.stdin)
-    stdout = getattr(sys.stdout, 'buffer', sys.stdout)
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--compress',
-        action='store_true',
-        help='compress data to be stored')
-    parser.add_argument('-p', '--password',
-        help='encryption password')
-    parser.add_argument('input',
-        nargs='?', type=argparse.FileType('rb'), default=stdin,
-        help='file to read data from (default stdin)')
-    parser.add_argument('output',
-        nargs='?', type=argparse.FileType('wb'), default=stdout,
-        help='file to write data to (default stdout)')
+def main():
     args = parser.parse_args()
 
     if args.password and not AES:
@@ -192,12 +210,18 @@ if '__main__' == __name__:
         sys.exit(-1)
 
     data = args.input.read()
+    args.input.name
 
     if not data.startswith(MAGIC):
-        png = PNGWriter(args.compress, args.password)
+        png = PNGWriter(args)
         png.pixels(data)
+        png.save()
         data = png.save()
     else:
-        data = PNGReader(args.password).read(data)
+        #PNGReader(args).read(data)
+        data = PNGReader(args).read(data)
 
     args.output.write(data)
+
+if '__main__' == __name__:
+    main()
