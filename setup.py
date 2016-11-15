@@ -8,7 +8,7 @@ setup(
     name               = 'pngify',
     author             = 'Matthew Oertle',
     author_email       = 'moertle@gmail.com',
-    version            = '0.2',
+    version            = '0.3',
     license            = 'MIT',
     url                = 'http://oertle.org/pngify',
     description        = 'Inject and extract data from PNG files',
