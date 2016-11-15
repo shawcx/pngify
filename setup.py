@@ -4,13 +4,11 @@ import os
 
 from setuptools import setup
 
-#exec(compile(open('_/py/version.py').read(),'version.py','exec'))
-
 setup(
     name               = 'pngify',
     author             = 'Matthew Oertle',
     author_email       = 'moertle@gmail.com',
-    version            = '0.1',
+    version            = '0.2',
     license            = 'MIT',
     url                = 'http://oertle.org/pngify',
     description        = 'Inject and extract data from PNG files',
