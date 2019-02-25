@@ -163,15 +163,14 @@ def main():
     args = parser.parse_args()
 
     data = args.input.read()
-    args.input.name
 
+    # assume that only non-PNG images are going to be inserted
     if not data.startswith(MAGIC):
         png = PNGWriter(args)
         png.pixels(data)
         png.save()
         data = png.save()
     else:
-        #PNGReader(args).read(data)
         data = PNGReader(args).read(data)
 
     args.output.write(data)

@@ -5,18 +5,21 @@ import os
 from setuptools import setup
 
 setup(
-    name               = 'pngify',
-    author             = 'Matthew Oertle',
-    author_email       = 'moertle@gmail.com',
-    version            = '0.3',
-    license            = 'MIT',
-    url                = 'http://oertle.org/pngify',
-    description        = 'Inject and extract data from PNG files',
-    long_description   = open('README.rst').read(),
-    scripts = [
-        'bin/pngify',
-        ],
-    classifiers=[
+    name              = 'pngify',
+    version           = '0.4',
+    author            = 'Matthew Oertle',
+    author_email      = 'moertle@gmail.com',
+    license           = 'MIT',
+    description       = 'Inject and extract data from PNG files',
+    long_description  = open('README.rst').read(),
+    url               = 'https://github.com/moertle/pngify',
+    py_modules   = ['pngify'],
+    entry_points = {
+        'console_scripts': [
+            'pngify = pngify:main',
+            ]
+        },
+    classifiers = [
         'Development Status :: 4 - Beta',
         'Environment :: Console',
         'License :: OSI Approved :: MIT License',
