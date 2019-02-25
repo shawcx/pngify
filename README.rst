@@ -2,4 +2,4 @@
 pngify
 ======
 
-Store arbitrary data in a PNG file
+Store and extract arbitrary data in a PNG file
