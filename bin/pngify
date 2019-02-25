@@ -11,64 +11,16 @@ import struct
 import sys
 import zlib
 
-try:
-    import Crypto.Cipher.AES as AES
-except ImportError:
-    AES = None
-
 MAGIC = b'\x89PNG\r\n\x1a\n'
 
 # python 2/3 support
 stdin  = getattr(sys.stdin,  'buffer', sys.stdin)
 stdout = getattr(sys.stdout, 'buffer', sys.stdout)
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument('-w', '--width',
-    type=int, default=0,
-    help='specify the width of the PNG')
-
-parser.add_argument('-c', '--compress',
-    action='store_true',
-    help='compress data to be stored')
-
-parser.add_argument('-p', '--password',
-    help='encryption password')
-
-parser.add_argument('input',
-    nargs='?', type=argparse.FileType('rb'), default=stdin,
-    help='file to read data from (default stdin)')
-
-parser.add_argument('output',
-    nargs='?', type=argparse.FileType('wb'), default=stdout,
-    help='file to write data to (default stdout)')
-
-
-def genkey(password):
-    material = hashlib.sha512(password.encode('utf-8')).digest()
-    return material[:32],material[-16:]
-
-
-def encrypt(password, data):
-    key,iv = genkey(password)
-    pad = 16 - (len(data) % 16)
-    data += struct.pack('<B', pad) * pad
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    return cipher.encrypt(data)
-
-
-def decrypt(password, data):
-    key,iv = genkey(password)
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    data = cipher.decrypt(data)
-    pad, = struct.unpack('<B', data[-1:])
-    return data[:-pad]
-
 
 class PNGWriter(object):
     def __init__(self, args):
         self.compress = args.compress
-        self.password = args.password
         self.width    = args.width
         self.height   = 0
         self.depth    = 8
@@ -93,10 +45,7 @@ class PNGWriter(object):
         if self.compress:
             data = zlib.compress(data)
 
-        if self.password:
-            data = encrypt(self.password, data)
-
-        header = struct.pack('>I??', len(data), self.compress, self.password != None)
+        header = struct.pack('>I?', len(data), self.compress)
         data = header + data
 
         if self.width == 0:
@@ -127,24 +76,14 @@ class PNGWriter(object):
 
 class PNGReader(object):
     def __init__(self, args):
-        self.password = args.password
         self.data = []
 
     def read(self, png):
         self.parse(png)
         data = b''.join(self.data)
-        size,compress,encrypted = struct.unpack('>I??', data[:6])
+        size,compress = struct.unpack('>I?', data[:5])
 
-        data = data[6:6+size]
-
-        if encrypted:
-            if AES is None:
-                print('ERROR: missing pycrypto')
-                sys.exit(-1)
-            if not self.password:
-                print('ERROR: No password specified')
-                sys.exit(-1)
-            data = decrypt(self.password, data)
+        data = data[5:5+size]
 
         if compress:
             data = zlib.decompress(data)
@@ -203,11 +142,25 @@ class PNGReader(object):
 
 
 def main():
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser()
 
-    if args.password and not AES:
-        print('ERROR: missing pycrypto')
-        sys.exit(-1)
+    parser.add_argument('-w', '--width',
+        type=int, default=0,
+        help='specify the width of the PNG')
+
+    parser.add_argument('-c', '--compress',
+        action='store_true',
+        help='compress data to be stored')
+
+    parser.add_argument('input',
+        nargs='?', type=argparse.FileType('rb'), default=stdin,
+        help='file to read data from (default stdin)')
+
+    parser.add_argument('output',
+        nargs='?', type=argparse.FileType('wb'), default=stdout,
+        help='file to write data to (default stdout)')
+
+    args = parser.parse_args()
 
     data = args.input.read()
     args.input.name
