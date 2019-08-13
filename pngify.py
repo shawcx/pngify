@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import argparse
 import binascii
-import hashlib
 import math
 import os
 import struct
