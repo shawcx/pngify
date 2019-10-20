@@ -167,7 +167,6 @@ def main():
     if not data.startswith(MAGIC):
         png = PNGWriter(args)
         png.pixels(data)
-        png.save()
         data = png.save()
     else:
         data = PNGReader(args).read(data)
