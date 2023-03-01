@@ -7,12 +7,12 @@ from setuptools import setup
 setup(
     name              = 'pngify',
     version           = '0.4',
-    author            = 'Matthew Oertle',
-    author_email      = 'moertle@gmail.com',
+    author            = 'Matthew Shaw',
+    author_email      = 'mshaw.cx@gmail.com',
     license           = 'MIT',
     description       = 'Inject and extract data from PNG files',
     long_description  = open('README.rst').read(),
-    url               = 'https://github.com/moertle/pngify',
+    url               = 'https://github.com/shawcx/pngify',
     py_modules   = ['pngify'],
     entry_points = {
         'console_scripts': [
