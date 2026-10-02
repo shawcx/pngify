@@ -4,6 +4,8 @@ from __future__ import print_function
 
 import argparse
 import binascii
+import getpass
+import hashlib
 import math
 import os
 import struct
@@ -12,14 +14,31 @@ import zlib
 
 MAGIC = b'\x89PNG\r\n\x1a\n'
 
+# header flags
+COMPRESSED = 0x01
+ENCRYPTED  = 0x02
+
+SALT_SIZE  = 16
+NONCE_SIZE = 12
+
 # python 2/3 support
 stdin  = getattr(sys.stdin,  'buffer', sys.stdin)
 stdout = getattr(sys.stdout, 'buffer', sys.stdout)
 
 
+def aesgcm(password, salt):
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    except ImportError:
+        sys.exit('error: encryption requires the cryptography package (pip install pngify[crypto])')
+    key = hashlib.scrypt(password.encode('utf-8'), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return AESGCM(key)
+
+
 class PNGWriter(object):
     def __init__(self, args):
         self.compress = args.compress
+        self.password = args.password
         self.width    = args.width
         self.height   = 0
         self.depth    = 8
@@ -41,10 +60,19 @@ class PNGWriter(object):
         origin = self.origin.encode('utf-8')
         data = struct.pack('>H', len(origin)) + origin + b''.join(self.data)
 
+        flags = 0
+
         if self.compress:
             data = zlib.compress(data)
+            flags |= COMPRESSED
 
-        header = struct.pack('>I?', len(data), self.compress)
+        if self.password:
+            salt  = os.urandom(SALT_SIZE)
+            nonce = os.urandom(NONCE_SIZE)
+            data  = salt + nonce + aesgcm(self.password, salt).encrypt(nonce, data, None)
+            flags |= ENCRYPTED
+
+        header = struct.pack('>IB', len(data), flags)
         data = header + data
 
         if self.width == 0:
@@ -80,11 +108,21 @@ class PNGReader(object):
     def read(self, png):
         self.parse(png)
         data = b''.join(self.data)
-        size,compress = struct.unpack('>I?', data[:5])
+        size,flags = struct.unpack('>IB', data[:5])
 
         data = data[5:5+size]
 
-        if compress:
+        if flags & ENCRYPTED:
+            from cryptography.exceptions import InvalidTag
+            salt  = data[:SALT_SIZE]
+            nonce = data[SALT_SIZE:SALT_SIZE+NONCE_SIZE]
+            password = getpass.getpass('Password: ')
+            try:
+                data = aesgcm(password, salt).decrypt(nonce, data[SALT_SIZE+NONCE_SIZE:], None)
+            except InvalidTag:
+                sys.exit('error: wrong password or corrupted data')
+
+        if flags & COMPRESSED:
             data = zlib.decompress(data)
 
         origin_size, = struct.unpack('>H', data[:2])
@@ -151,6 +189,10 @@ def main():
         action='store_true',
         help='compress data to be stored')
 
+    parser.add_argument('-p', '--password',
+        action='store_true',
+        help='encrypt data with a password (prompted; needs the cryptography package)')
+
     parser.add_argument('input',
         nargs='?', type=argparse.FileType('rb'), default=stdin,
         help='file to read data from (default stdin)')
@@ -165,6 +207,10 @@ def main():
 
     # assume that only non-PNG images are going to be inserted
     if not data.startswith(MAGIC):
+        if args.password:
+            args.password = getpass.getpass('Password: ')
+            if args.password != getpass.getpass('Confirm password: '):
+                sys.exit('error: passwords do not match')
         png = PNGWriter(args)
         png.pixels(data)
         data = png.save()
